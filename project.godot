@@ -1,0 +1,43 @@
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
+
+config_version=5
+
+[application]
+
+config/name="Третья планета"
+config/description="Казуальная головоломка для Android: поле 8×16, шары-планеты, режим против компьютера, очки за линии из трёх и более одинаковых шаров."
+config/version="0.1.0"
+run/main_scene="res://scenes/main.tscn"
+config/features=PackedStringArray("4.5", "Forward Plus")
+config/icon="res://icon.svg"
+
+[audio]
+
+driver/output_latency_ms=15
+
+[display]
+
+window/size/viewport_width=720
+window/size/viewport_height=1280
+window/size/resizable=false
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+window/handheld/orientation=1
+
+[dotnet]
+
+project/assembly_name="Третья планета"
+
+[input_devices]
+
+pointing/emulate_touch_from_mouse=true
+
+[rendering]
+
+textures/canvas_textures/default_texture_filter=2
