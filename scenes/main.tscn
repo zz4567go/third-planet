@@ -1,3 +1,7 @@
-[gd_scene format=3 uid="uid://dhy01mainscene"]
+[gd_scene load_steps=2 format=3 uid="uid://dhy01mainscene"]
+
+[ext_resource type="PackedScene" uid="uid://btitle001" path="res://scenes/title_screen.tscn" id="1_title"]
 
 [node name="Main" type="Node"]
+
+[node name="TitleScreen" parent="." instance=ExtResource("1_title")]
