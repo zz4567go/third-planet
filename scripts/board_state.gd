@@ -13,12 +13,6 @@ func _init() -> void:
 	cells.fill(-1)
 
 
-func clone() -> BoardState:
-	var b := BoardState.new()
-	b.cells = cells.duplicate()
-	return b
-
-
 @warning_ignore("integer_division")
 static func idx_to_rc(i: int) -> Vector2i:
 	return Vector2i(i % COLS, int(i / COLS))
@@ -73,6 +67,51 @@ func has_path(from_idx: int, to_idx: int) -> bool:
 			visited[ni] = true
 			queue.append(ni)
 	return false
+
+
+## Цепочка индексов от клетки с шаром до цели по пустым клеткам (включая оба конца). Пустой массив, если хода нет.
+func find_path_for_move(from_idx: int, to_idx: int) -> Array[int]:
+	if not has_path(from_idx, to_idx):
+		return []
+	var parents: Dictionary = {}
+	var queue: Array[int] = []
+	var from_rc := idx_to_rc(from_idx)
+	for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+		var n: Vector2i = from_rc + d
+		if not in_bounds_rc(n):
+			continue
+		var ni := rc_to_idx(n)
+		if cells[ni] != -1:
+			continue
+		parents[ni] = from_idx
+		queue.append(ni)
+
+	var qpos := 0
+	while qpos < queue.size():
+		var u: int = queue[qpos]
+		qpos += 1
+		if u == to_idx:
+			var chain: Array[int] = []
+			var c: int = to_idx
+			while c != from_idx:
+				chain.append(c)
+				c = parents[c]
+			chain.append(from_idx)
+			chain.reverse()
+			return chain
+		var urc: Vector2i = idx_to_rc(u)
+		for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+			var n: Vector2i = urc + d
+			if not in_bounds_rc(n):
+				continue
+			var ni := rc_to_idx(n)
+			if parents.has(ni):
+				continue
+			if cells[ni] != -1:
+				continue
+			parents[ni] = u
+			queue.append(ni)
+	return []
 
 
 func apply_move(from_idx: int, to_idx: int) -> void:
@@ -167,3 +206,37 @@ func list_legal_moves() -> Array[Vector2i]:
 			if has_path(from_idx, to_idx):
 				out.append(Vector2i(from_idx, to_idx))
 	return out
+
+
+func duplicate_state() -> BoardState:
+	var copy := BoardState.new()
+	copy.cells = cells.duplicate()
+	return copy
+
+
+## Жадный выбор: максимум немедленных очков после хода; при равенстве — больше клеток к удалению; иначе случайный среди кандидатов.
+func pick_greedy_move(moves: Array[Vector2i], rng: RandomNumberGenerator) -> Vector2i:
+	if moves.is_empty():
+		return Vector2i(-1, -1)
+	var best_score := -1
+	var best_clear := -1
+	var candidates: Array[Vector2i] = []
+	for m in moves:
+		var sim := duplicate_state()
+		sim.apply_move(m.x, m.y)
+		var data: Dictionary = sim.collect_matches()
+		var sc := int(data[&"score"])
+		var clr: int = data[&"to_remove"].size()
+		if sc > best_score:
+			best_score = sc
+			best_clear = clr
+			candidates.clear()
+			candidates.append(m)
+		elif sc == best_score:
+			if clr > best_clear:
+				best_clear = clr
+				candidates.clear()
+				candidates.append(m)
+			elif clr == best_clear:
+				candidates.append(m)
+	return candidates[rng.randi() % candidates.size()]

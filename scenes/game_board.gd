@@ -7,6 +7,9 @@ const CELL_COUNT := COLS * ROWS
 const BOARD_STATE_SCRIPT := preload("res://scripts/board_state.gd")
 const CELL_SCENE := preload("res://scenes/board/cell_view.tscn")
 
+const MOVE_STEP_SEC := 0.095
+const AI_THINK_PAUSE_SEC := 0.28
+
 var _rng := RandomNumberGenerator.new()
 var _board = BOARD_STATE_SCRIPT.new()
 
@@ -134,6 +137,71 @@ func _place_kinds_on_board(kinds: Array[int]) -> void:
 		_board.cells[empties[j]] = kinds[j]
 
 
+func _cell_center_global(grid_idx: int) -> Vector2:
+	if grid_idx < 0 or grid_idx >= _grid.get_child_count():
+		return Vector2.ZERO
+	var ctl := _grid.get_child(grid_idx) as Control
+	if ctl == null:
+		return Vector2.ZERO
+	return ctl.get_global_rect().get_center()
+
+
+func _ball_visual_side(grid_idx: int) -> float:
+	if grid_idx < 0 or grid_idx >= _grid.get_child_count():
+		return 24.0
+	var ctl := _grid.get_child(grid_idx) as Control
+	if ctl == null:
+		return 24.0
+	var side := minf(ctl.size.x, ctl.size.y) * 0.72
+	return maxf(side, 12.0)
+
+
+## Перелёт шара по пути по пустым клеткам; затем `apply_move` и `_sync_cells`. Общее для игрока и ИИ.
+func _animate_move_then_apply(from_idx: int, to_idx: int) -> void:
+	var kind: int = _board.cells[from_idx]
+	var pal_idx := mini(kind, _palette.size() - 1)
+	var path: Array[int] = _board.find_path_for_move(from_idx, to_idx)
+
+	var from_cell := _grid.get_child(from_idx) as CellView
+	if from_cell == null:
+		_board.apply_move(from_idx, to_idx)
+		_sync_cells()
+		return
+
+	if path.size() < 2:
+		_board.apply_move(from_idx, to_idx)
+		_sync_cells()
+		return
+
+	from_cell.clear_ball()
+
+	var ball_side := _ball_visual_side(from_idx)
+	var ghost := Panel.new()
+	ghost.mouse_filter = MOUSE_FILTER_IGNORE
+	ghost.z_index = 24
+	CellView.apply_ball_style(ghost, _palette[pal_idx], ball_side)
+	add_child(ghost)
+	ghost.size = Vector2(ball_side, ball_side)
+	var start_center := _cell_center_global(path[0])
+	ghost.global_position = start_center - ghost.size * 0.5
+
+	var tween := create_tween()
+	tween.set_parallel(false)
+	tween.set_trans(Tween.TRANS_QUAD)
+	tween.set_ease(Tween.EASE_OUT)
+	for i in range(path.size() - 1):
+		var target_center := _cell_center_global(path[i + 1])
+		var target_pos := target_center - ghost.size * 0.5
+		tween.tween_property(ghost, "global_position", target_pos, MOVE_STEP_SEC)
+
+	await tween.finished
+	if is_instance_valid(ghost):
+		ghost.queue_free()
+
+	_board.apply_move(from_idx, to_idx)
+	_sync_cells()
+
+
 func _sync_cells() -> void:
 	for i in CELL_COUNT:
 		var cell := _grid.get_child(i) as CellView
@@ -214,15 +282,14 @@ func _start_ai_turn() -> void:
 
 func _ai_play_sequence() -> void:
 	while true:
-		await get_tree().create_timer(0.42).timeout
+		await get_tree().create_timer(AI_THINK_PAUSE_SEC).timeout
 		if not _board.any_legal_move():
 			return
 		var moves: Array[Vector2i] = _board.list_legal_moves()
 		if moves.is_empty():
 			return
-		var pick: Vector2i = moves[_rng.randi() % moves.size()]
-		_board.apply_move(pick.x, pick.y)
-		_sync_cells()
+		var pick: Vector2i = _board.pick_greedy_move(moves, _rng)
+		await _animate_move_then_apply(pick.x, pick.y)
 		var data: Dictionary = _board.collect_matches()
 		var matched: Dictionary = data[&"to_remove"]
 		if matched.is_empty():
@@ -268,9 +335,14 @@ func _on_cell_clicked(which: int) -> void:
 		return
 
 	_busy = true
-	_board.apply_move(from_idx, which)
 	_clear_selection()
-	_sync_cells()
+	_run_human_move_after_pick(from_idx, which)
+
+
+func _run_human_move_after_pick(from_idx: int, to_idx: int) -> void:
+	await _animate_move_then_apply(from_idx, to_idx)
+	if _game_ended:
+		return
 
 	var data: Dictionary = _board.collect_matches()
 	var matched: Dictionary = data[&"to_remove"]

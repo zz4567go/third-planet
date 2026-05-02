@@ -19,13 +19,8 @@ func _ready() -> void:
 	_ball.visible = false
 
 
-func show_ball(color: Color) -> void:
-	if _ball == null:
-		return
+static func apply_ball_style(panel: Panel, color: Color, side: float) -> void:
 	var sb := StyleBoxFlat.new()
-	var side := minf(_ball.size.x, _ball.size.y)
-	if side <= 0.0:
-		side = minf(size.x, size.y) * 0.72
 	var r := maxi(int(side * 0.5), 4)
 	sb.corner_radius_top_left = r
 	sb.corner_radius_top_right = r
@@ -34,7 +29,16 @@ func show_ball(color: Color) -> void:
 	sb.bg_color = color
 	sb.border_color = Color(1, 1, 1, 0.28)
 	sb.set_border_width_all(2)
-	_ball.add_theme_stylebox_override(&"panel", sb)
+	panel.add_theme_stylebox_override(&"panel", sb)
+
+
+func show_ball(color: Color) -> void:
+	if _ball == null:
+		return
+	var side := minf(_ball.size.x, _ball.size.y)
+	if side <= 0.0:
+		side = minf(size.x, size.y) * 0.72
+	apply_ball_style(_ball, color, side)
 	_ball.visible = true
 
 
@@ -55,7 +59,7 @@ func _gui_input(event: InputEvent) -> void:
 		activate = st.pressed
 	elif event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
-		activate = mb.button_index == MOUSE_BUTTON_LEFT and mb.pressed and not mb.echo
+		activate = mb.button_index == MOUSE_BUTTON_LEFT and mb.pressed and not mb.is_echo()
 
 	if not activate:
 		return
